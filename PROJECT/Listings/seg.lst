@@ -1,0 +1,110 @@
+C51 COMPILER V9.54   SEG                                                                   10/30/2024 11:54:03 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE SEG
+OBJECT MODULE PLACED IN ..\OBJ\seg.obj
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.EXE ..\HARDWARE\seg.c OPTIMIZE(8,SPEED) BROWSE INCDIR(..\HARDWARE;..\SYS;D:\
+                    -Keil_v5\C51\INC) DEBUG OBJECTEXTEND PRINT(.\Listings\seg.lst) TABS(2) OBJECT(..\OBJ\seg.obj)
+
+line level    source
+
+   1          #include "seg.h"
+   2          
+   3          
+   4          //转换函数，将字符串转换为数组函数，数组内部即为段码
+   5          //pucSeg_Buf为一个数组，内部存放的是字符串,最长为8，例如“12.345678”
+   6          //pucSeg_Code为一个数组，内部存放的是字符串转换之后的段码，最长也是8个，例如，上述转换为F9 A4 B0....
+   7          
+   8          void Seg_Tran(unsigned char *pucSeg_Buf , unsigned char *pucSeg_Code )
+   9          {
+  10   1        unsigned char i, j=0, temp;
+  11   1        
+  12   1        for(i=0; i<8; i++, j++)
+  13   1        {
+  14   2          switch(pucSeg_Buf[j])
+  15   2          {
+  16   3            case '0': temp= 0xC0;  break;
+  17   3            case '1': temp= 0xF9;  break;     
+  18   3            case '2': temp= 0xA4;  break;
+  19   3            case '3': temp= 0xB0;  break; 
+  20   3            case '4': temp= 0x99;  break;
+  21   3            case '5': temp= 0x92;  break;     
+  22   3            case '6': temp= 0x82;  break;
+  23   3            case '7': temp= 0xF8;  break; 
+  24   3            case '8': temp= 0x80;  break;     
+  25   3            case '9': temp= 0x90;  break;
+  26   3            
+  27   3            case 'A': temp= 0x88;  break; 
+  28   3            case 'B': temp= 0x83;  break;
+  29   3            case 'C': temp= 0xC6;  break; 
+  30   3            case 'D': temp= 0xA1;  break;     
+  31   3            case 'E': temp= 0x86;  break;
+  32   3            case 'F': temp= 0x8E;  break; 
+  33   3            
+  34   3            case 'T': temp= 0x87;  break; 
+  35   3            case 'Y': temp= 0x91;  break; 
+  36   3            
+  37   3            case 'H': temp= 0x89;  break; 
+  38   3            case 'L': temp= 0xC7;  break;
+  39   3            case 'N': temp= 0xC8;  break; 
+  40   3            case 'P': temp= 0x8C;  break;     
+  41   3            case 'U': temp= 0xC1;  break;
+  42   3            case '-': temp= 0xBF;  break;   
+  43   3            case ' ': temp= 0xFF;  break;
+  44   3            default: temp= 0xFF;            
+  45   3          }
+  46   2          
+  47   2          if(pucSeg_Buf[j+1] == '.')
+  48   2          {
+  49   3            temp= temp & 0x7F;
+  50   3            j++;  
+  51   3          }
+  52   2          
+  53   2          pucSeg_Code[i] = temp;
+  54   2        }
+C51 COMPILER V9.54   SEG                                                                   10/30/2024 11:54:03 PAGE 2   
+
+  55   1      }
+  56          
+  57          //数组内容显示函数，将数组中的数值显示出来
+  58          //pucSeg_Code为要显示的数组数值
+  59          //ucSeg_Pos为要在数码管第几个位置显示
+  60          
+  61          void Seg_Disp( unsigned char *pucSeg_Code, unsigned char ucSeg_Pos)
+  62          {
+  63   1        P0 = 0XFF;  //段选，控制送入的段码数据
+  64   1        P2 = P2 & 0X1F | 0XE0;
+  65   1        P2 &= 0X1F; //  P2 = P2 & 0X1F;   
+  66   1        
+  67   1        P0 = 1<<ucSeg_Pos;  //位选，控制第几个数码管位选通
+  68   1        P2 = P2 & 0X1F | 0XC0;
+  69   1        P2 &= 0X1F; //  P2 = P2 & 0X1F;
+  70   1        
+  71   1        P0 = pucSeg_Code[ucSeg_Pos];  //段选，控制送入的段码数据
+  72   1        P2 = P2 & 0X1F | 0XE0;
+  73   1        P2 &= 0X1F; //  P2 = P2 & 0X1F; 
+  74   1      }
+  75          
+  76          
+  77          
+  78          
+  79          
+  80          
+  81          
+  82          
+  83          
+  84          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    352    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----       9
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

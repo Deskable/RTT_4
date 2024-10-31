@@ -1,0 +1,258 @@
+C51 COMPILER V9.54   MAIN                                                                  10/31/2024 20:04:39 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN ..\OBJ\main.obj
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.EXE ..\USER\main.c OPTIMIZE(8,SPEED) BROWSE INCDIR(..\HARDWARE;..\SYS;D:\Kei
+                    -l_v5\C51\INC) DEBUG OBJECTEXTEND PRINT(.\Listings\main.lst) TABS(2) OBJECT(..\OBJ\main.obj)
+
+line level    source
+
+   1          #include "STC15F2K60S2.h"
+   2          #include "led.h"
+   3          #include "delay.h"
+   4          #include "tim.h"
+   5          #include "key.h"
+   6          #include "seg.h"
+   7          #include "stdio.h"
+   8          
+   9          #define KEY_DELAY_TIME 10 // 按键降速时间
+  10          #define KEY_LONG_TIME 60  // 长按 按键等待时间
+  11          
+  12          unsigned char ucKey_Dly, ucKey_Old, ucState; // 按键专属，降速，按键判别等变量
+  13          unsigned int key_cut;                        // 计算按下后循环次数与KEY_LONG_TIME配套使用
+  14          unsigned int uiSeg_Dly, ucSeg_Pos = 0;       // 显示专用，降速,显示位置
+  15          unsigned char key_flag, key_type, key_wait;  // 自锁,按键类型\0为短按，1为长按
+  16          unsigned char pucSeg_Code[8];                // 本数组内存放的是要显示的字符的段码，为转换之后的结果
+  17          unsigned char pucSeg_Buf[9];                 // 本数组内存放的是要显示的字符串，用来进行转换，结果放在pucS
+             -eg_Code
+  18          unsigned char mode = 0;                      // 模式切换
+  19          unsigned char flag = 0;                      // 呼吸灯、上位机切换
+  20          
+  21          char ta[4] = {'T', 'E', 'A', 'P'};
+  22          char a[4] = {'A', 'A', 'A', 'A'};
+  23          float numtest = 123.456;
+  24          
+  25          void Key_Proc(void);
+  26          void Seg_Proc(void);
+  27          void Mode_Type(void);
+  28          
+  29          void main()
+  30          {
+  31   1          Cls_Peripheral(); // 关闭LED及周边蜂鸣器等
+  32   1          Timer1_Init();    // 定时器配置并打开1ms
+  33   1      
+  34   1          while (1)
+  35   1          {
+  36   2              Key_Proc(); // 按键判断
+  37   2              Seg_Proc(); // 数据采集及数据转换，用于数据显示
+  38   2              Mode_Type();
+  39   2          }
+  40   1      }
+  41          
+  42          void Time_1(void) interrupt 3 // 中断函数，每隔1ms会进入一次
+  43          {
+  44   1          if (++uiSeg_Dly == 500)
+  45   1              uiSeg_Dly = 0;
+  46   1      
+  47   1          if (++ucKey_Dly == KEY_DELAY_TIME)
+  48   1              ucKey_Dly = 0;
+  49   1      
+  50   1          if (uiSeg_Dly)
+  51   1          {
+  52   2              uiSeg_Dly = 1;
+  53   2              Seg_Disp(pucSeg_Code, ucSeg_Pos);
+C51 COMPILER V9.54   MAIN                                                                  10/31/2024 20:04:39 PAGE 2   
+
+  54   2              if (++ucSeg_Pos == 8)
+  55   2                  ucSeg_Pos = 0;
+  56   2          }
+  57   1      }
+  58          
+  59          void Key_Proc(void)
+  60          {
+  61   1          unsigned char ucKey_Val, ucKey_Down;
+  62   1      
+  63   1          if (ucKey_Dly)
+  64   1              return;
+  65   1          ucKey_Dly = 1;
+  66   1      
+  67   1          {
+  68   2              // 分成几种情况
+  69   2              // 情况1：100ms两次扫描，按键得到的结果从0（都没按下）到B4按下，产生了下降沿。
+  70   2              // ucKey_Val = 4(0000 0100)
+  71   2              // unKey_Down = 0000 0100 & ( 0000 0000 ^ 0000 0100) = 0000 0100 & 0000 0100 = 0000 0100 (4)
+  72   2              // ucKey_Up = 1111 1011 & 0000 0100 = 0000 0000
+  73   2              // ucKey_Old = 4
+  74   2      
+  75   2              // 情况2：B4产生了下降沿后，按键一直按着
+  76   2              // ucKey_Val = 4(0000 0100)
+  77   2              // unKey_Down = 0000 0100 & ( 0000 0100 ^ 0000 0100) = 0000 0100 & 0000 0000 = 0000 0000 (0)
+  78   2              // ucKey_Up = 1111 1011 & 0000 0000 = 0000 0000
+  79   2              // ucKey_Old = 4
+  80   2      
+  81   2              // 情况3：B4按键一直按着随后弹起
+  82   2              // ucKey_Val = 0(0000 0000)
+  83   2              // unKey_Down = 0000 0000 & ( 0000 0100 ^ 0000 0000) = 0000 0000 & 0000 0100 = 0000 0000 (0)
+  84   2              // ucKey_Up = 1111 1111 & 0000 0100 = 0000 0100 (4)
+  85   2              // ucKey_Old = 0
+  86   2          }
+  87   1      
+  88   1          ucKey_Val = Key_Read();
+  89   1          if (ucKey_Val == 10 || ucKey_Old == 10)
+  90   1              ucKey_Down = ~ucKey_Val & (ucKey_Val ^ ucKey_Old); // 上升沿判定按键（松开生效）
+  91   1          else
+  92   1              ucKey_Down = ucKey_Val & (ucKey_Val ^ ucKey_Old); // 下降沿判定按键（按下生效）
+  93   1      
+  94   1          ucKey_Old = ucKey_Val;
+  95   1      
+  96   1          // 判断长按
+  97   1          if (!ucKey_Val) // 按键未按下
+  98   1          {
+  99   2              key_cut = 0;  // 计数
+ 100   2              key_flag = 0; // 自锁
+ 101   2          }
+ 102   1          else if (!key_flag)
+ 103   1          {
+ 104   2              key_cut++;    // 计算按下后循环次数
+ 105   2              key_type = 0; // 按键类型0为短按，1为长按
+ 106   2              if (key_cut > KEY_LONG_TIME)
+ 107   2              {
+ 108   3                  key_cut = 0; // 循环次数归零
+ 109   3                  key_flag = 1;
+ 110   3                  // 自锁锁定，!key_flag为假 跳过 如果为上升
+ 111   3                  // 等待按键松开恢复
+ 112   3                  // 避免重复触发
+ 113   3                  key_type = 1;           // 按键类型0为短按，1为长按
+ 114   3                  ucKey_Down = ucKey_Old; // 长按按键，但是时间达到直接输出
+ 115   3              }
+C51 COMPILER V9.54   MAIN                                                                  10/31/2024 20:04:39 PAGE 3   
+
+ 116   2          }
+ 117   1      
+ 118   1          switch (ucKey_Down)
+ 119   1          {
+ 120   2          case 4:
+ 121   2              ucState = 4;
+ 122   2              break;
+ 123   2          case 5:
+ 124   2              ucState = 5;
+ 125   2              break;
+ 126   2          case 6:
+ 127   2              ucState = 6;
+ 128   2              break;
+ 129   2          case 7:
+ 130   2              ucState = 7;
+ 131   2              flag = !flag;
+ 132   2              break;
+ 133   2          // case 8:
+ 134   2          //     ucState = 8;
+ 135   2          //     break;
+ 136   2          // case 9:
+ 137   2          //     ucState = 9;
+ 138   2          //     break;
+ 139   2          case 10:
+ 140   2              ucState = 10;
+ 141   2              break;
+ 142   2          case 11:
+ 143   2              ucState = 11;
+ 144   2              flag = !flag;
+ 145   2              break;
+ 146   2          case 16:
+ 147   2              mode++;
+ 148   2              if (mode > 4)
+ 149   2                  mode = 1;
+ 150   2              break;
+ 151   2      
+ 152   2          default:
+ 153   2              break;
+ 154   2          }
+ 155   1      }
+ 156          
+ 157          void Seg_Proc(void)
+ 158          {
+ 159   1      }
+ 160          
+ 161          void Mode_Type(void)
+ 162          {
+ 163   1          if (mode == 1)
+ 164   1          {
+ 165   2              if (ucState == 7)
+ 166   2              {
+ 167   3                  if (flag)
+ 168   3                  {
+ 169   4                      Led_Disp(0x3C);
+ 170   4                  }
+ 171   3                  else
+ 172   3                  {
+ 173   4                      Led_Disp(0x00);
+ 174   4                      /* code */
+ 175   4                  }
+ 176   3              }
+ 177   2              sprintf(pucSeg_Buf, "%-8c", ' ');
+C51 COMPILER V9.54   MAIN                                                                  10/31/2024 20:04:39 PAGE 4   
+
+ 178   2          }
+ 179   1          else if (mode == 2)
+ 180   1          {
+ 181   2              switch (ucState)
+ 182   2              {
+ 183   3              case 6:
+ 184   3                  sprintf(pucSeg_Buf, "%-8.4s", ta);
+ 185   3                  break;
+ 186   3              case 5:
+ 187   3                  //
+ 188   3                  sprintf(pucSeg_Buf, "%9.3f", numtest);
+ 189   3                  break;
+ 190   3              }
+ 191   2          }
+ 192   1          else if (mode == 3)
+ 193   1          {
+ 194   2              if (ucState == 4)
+ 195   2              {
+ 196   3                  sprintf(pucSeg_Buf, "%s", a);
+ 197   3              }
+ 198   2              else if (ucState == 10)
+ 199   2              {
+ 200   3                  if (key_type)
+ 201   3                  {
+ 202   4                      /* 长按*/
+ 203   4                      sprintf(pucSeg_Buf, "%-8c", '7');
+ 204   4                  }
+ 205   3                  else
+ 206   3                  {
+ 207   4                      /* 短按 */
+ 208   4                      sprintf(pucSeg_Buf, "%8c", '6');
+ 209   4                  }
+ 210   3              }
+ 211   2          }
+ 212   1          else if (mode == 4)
+ 213   1          {
+ 214   2              if (ucState == 11)
+ 215   2              {
+ 216   3                  if (flag)
+ 217   3                  {
+ 218   4                      sprintf(pucSeg_Buf, "%-8c", 'E');
+ 219   4                  }
+ 220   3                  else
+ 221   3                  {
+ 222   4                      sprintf(pucSeg_Buf, "%8c", 'A');
+ 223   4                  }
+ 224   3              }
+ 225   2          }
+ 226   1          Seg_Tran(pucSeg_Buf, pucSeg_Code);
+ 227   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    567    ----
+   CONSTANT SIZE    =     25    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     43       1
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
